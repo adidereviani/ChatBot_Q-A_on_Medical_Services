@@ -9,3 +9,4 @@ def get_context_from_html(hmo, tier):
             path = os.path.join(folder, filename)
             context += extract_data_by_hmo_and_tier(path, hmo, tier) + "\n"
     return context
+
