@@ -1,3 +1,1 @@
-Screenshots
-=====================
-![paint software](ChatBot.pdf)
+[📄 View Full Documentation (PDF)](ChatBot.pdf)
