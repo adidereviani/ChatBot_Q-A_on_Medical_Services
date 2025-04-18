@@ -1,8 +1,10 @@
 import asyncio
 import httpx
 
+# API endpoint URL
 API_URL = "http://localhost:8000/chat"
 
+# First test payload
 payload_1 = {
     "phase": "qa",
     "user_info": {
@@ -12,6 +14,7 @@ payload_1 = {
     "messages": [{"role": "user", "content": "מה ההנחה על סתימה?"}]
 }
 
+# Second test payload
 payload_2 = {
     "phase": "qa",
     "user_info": {
@@ -22,11 +25,17 @@ payload_2 = {
 }
 
 async def send_request(payload):
+    """
+    Sends an asynchronous POST request with the given payload and prints the response.
+    """
     async with httpx.AsyncClient() as client:
         response = await client.post(API_URL, json=payload)
         print(response.json())
 
 async def main():
+    """
+    Test that runs multiple requests concurrently.
+    """
     await asyncio.gather(
         send_request(payload_1),
         send_request(payload_2)

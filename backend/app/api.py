@@ -1,23 +1,38 @@
+import json
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ValidationError, validator
 from typing import List, Dict, Any
 
-from app.services.llm_client import ask_llm
+from app.services.info_collector import collect_user_info
+from app.services.user_info_extractor import extract_user_info
+from app.services.qa_handler import answer_question
+from app.services.confirm_classifier import is_confirmation
 from app.utils.logger import logger
 
+# Initialize FastAPI router
 router = APIRouter()
 
 class ChatMessage(BaseModel):
+    """
+    Represents a single chat message with a role and content.
+    """
     role: str
     content: str
 
 class ChatRequest(BaseModel):
+    """
+    Represents the incoming chat request payload.
+    Includes conversation phase, user info, and messages.
+    """
     phase: str
     user_info: Dict[str, Any]
     messages: List[ChatMessage]
 
     @validator("phase")
     def validate_phase(cls, v):
+        """
+        Validates that the phase is either 'info_collection' or 'qa'.
+        """
         if v not in ("info_collection", "qa"):
             raise ValueError("phase must be 'info_collection' or 'qa'")
         return v
@@ -26,31 +41,42 @@ class ChatRequest(BaseModel):
 @router.post("/chat")
 async def chat_endpoint(payload: ChatRequest):
     """
-    Receives:
-    {
-      "phase": "info_collection" or "qa",
-      "user_info": {...},
-      "messages": [{"role": "user"|"assistant", "content": "..."}, ...]
-    }
-
-    Returns a JSON response: {"response": "..."}
+    Chat endpoint that handles info collection and question answering phases.
+    Depending on the phase, it interacts with the LLM to either collect information
+    or answer user queries based on provided personal details.
     """
-    # Log the inbound request
-    logger.info(f"Incoming chat request | phase={payload.phase} | user_info={payload.user_info}")
-
     try:
-        # The server does not store user state.
-        # All session data is from the client (payload).
-        response_text = ask_llm(payload.phase, payload.user_info, [msg.dict() for msg in payload.messages])
-        # Log the outbound response
-        logger.info(f"Chat response: {response_text[:200]}...")  # partial to avoid huge logs
-        return {"response": response_text}
+        msgs = [m.dict() for m in payload.messages]
+
+        if payload.phase == "info_collection":
+            reply = collect_user_info(msgs)
+
+            if len(payload.messages) >= 8 and is_confirmation(payload.messages[-1].content):
+                last_bot = next(m["content"] for m in reversed(msgs) if m["role"] == "assistant")
+                try:
+                    user_info = extract_user_info(last_bot)
+                    next_phase = "qa"
+                    reply = answer_question(user_info, msgs)
+                except Exception:
+                    user_info = payload.user_info
+                    next_phase = "info_collection"
+            else:
+                user_info = payload.user_info
+                next_phase = "info_collection"
+
+        else:
+            user_info = payload.user_info
+            reply = answer_question(user_info, msgs)
+            next_phase = None
+
+        return {"response": reply, "next_phase": next_phase, "user_info": user_info}
+
     except ValidationError as ve:
         logger.error(f"Validation Error: {ve}")
-        raise HTTPException(status_code=422, detail=str(ve))
+        raise HTTPException(422, str(ve))
     except ValueError as ve:
         logger.error(f"Value Error: {ve}")
-        raise HTTPException(status_code=400, detail=str(ve))
+        raise HTTPException(400, str(ve))
     except Exception as e:
-        logger.exception("Unhandled exception during chat request")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        logger.exception("Unhandled exception")
+        raise HTTPException(500, "Internal Server Error")
