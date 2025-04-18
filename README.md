@@ -1,4 +1,4 @@
-# 📄 ChatBot_Q-A_on_Medical_Services
+# 📄 Microservice-based ChatBot Q&A on Medical Services
 
 An AI-powered, multilingual (Hebrew and English) **stateless microservice chatbot** that collects personal medical information and provides **personalized Q&A** about services offered by Israeli HMOs: **Maccabi**, **Meuhedet**, and **Clalit**. All user session data is managed on the client side (frontend).
 
